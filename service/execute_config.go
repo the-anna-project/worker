@@ -46,3 +46,19 @@ func (ec *executeConfig) CancelOnError() bool {
 func (ec *executeConfig) NumWorkers() int {
 	return ec.numWorkers
 }
+
+func (ec *executeConfig) SetAction(action func(canceler <-chan struct{}) error) {
+	ec.action = action
+}
+
+func (ec *executeConfig) SetCanceler(canceler chan struct{}) {
+	ec.canceler = canceler
+}
+
+func (ec *executeConfig) SetCancelOnError(cancelOnError bool) {
+	ec.cancelOnError = cancelOnError
+}
+
+func (ec *executeConfig) SetNumWorkers(numWorkers int) {
+	ec.numWorkers = numWorkers
+}
