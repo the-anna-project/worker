@@ -5,18 +5,19 @@ import (
 	"sync"
 )
 
-// Config represents the configuration used to create a new worker service.
-type Config struct {
+// ServiceConfig represents the configuration used to create a new worker
+// service.
+type ServiceConfig struct {
 }
 
-// DefaultConfig provides a default configuration to create a new worker service
-// by best effort.
-func DefaultConfig() Config {
-	return Config{}
+// DefaultServiceConfig provides a default configuration to create a new worker
+// service by best effort.
+func DefaultServiceConfig() ServiceConfig {
+	return ServiceConfig{}
 }
 
-// New creates a new configured worker service.
-func New(config Config) (Service, error) {
+// NewService creates a new configured worker service.
+func NewService(config ServiceConfig) (Service, error) {
 	return &service{}, nil
 }
 
