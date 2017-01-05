@@ -24,25 +24,11 @@ func NewService(config ServiceConfig) (Service, error) {
 type service struct {
 }
 
-// ExecuteConfig provides a default configuration to execute a new worker pool
-// by best effort.
-func (s *service) ExecuteConfig() ExecuteConfig {
-	return ExecuteConfig{
-		// Settings.
-
-		Actions:       []func(canceler <-chan struct{}) error{},
-		Canceler:      nil,
-		CancelOnError: true,
-		NumWorkers:    1,
-	}
-}
-
 func (s *service) Execute(config ExecuteConfig) error {
 	var wg sync.WaitGroup
 	var once sync.Once
 
 	canceler := make(chan struct{}, 1)
-	errors := make(chan error, 1)
 
 	if config.Canceler != nil {
 		go func() {
@@ -61,11 +47,14 @@ func (s *service) Execute(config ExecuteConfig) error {
 		go func() {
 			for _, action := range config.Actions {
 				wg.Add(1)
-				go func() {
+				go func(action func(canceler <-chan struct{}) error) {
 					defer wg.Done()
 
 					err := action(canceler)
 					if err != nil {
+						// We want to capture errors in any case, so we do this at first.
+						config.Errors <- err
+
 						if config.CancelOnError && config.Canceler != nil {
 							// Closing the canceler channel acts as broadcast to all workers that
 							// should listen to the canceler. Here we also make sure we do not
@@ -74,9 +63,8 @@ func (s *service) Execute(config ExecuteConfig) error {
 								close(config.Canceler)
 							})
 						}
-						errors <- err
 					}
-				}()
+				}(action)
 			}
 		}()
 	}
@@ -84,9 +72,26 @@ func (s *service) Execute(config ExecuteConfig) error {
 	wg.Wait()
 
 	select {
-	case err := <-errors:
+	case err := <-config.Errors:
+		// The errors channel is supposed to hold all errors. Here it also serves as
+		// internal state of truth. So we have to read the first error occured.
+		// Then, to not modify the errors channel from the client point of view, we
+		// put the read error back.
+		config.Errors <- err
 		return err
 	default:
 		return nil
+	}
+}
+
+func (s *service) ExecuteConfig() ExecuteConfig {
+	return ExecuteConfig{
+		// Settings.
+
+		Actions:       []func(canceler <-chan struct{}) error{},
+		Canceler:      nil,
+		CancelOnError: true,
+		Errors:        make(chan error, 1),
+		NumWorkers:    1,
 	}
 }

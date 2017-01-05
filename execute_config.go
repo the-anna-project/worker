@@ -13,6 +13,8 @@ type ExecuteConfig struct {
 	// CancelOnError defines whether to signal cancelation of worker processes in
 	// case one worker of the pool throws an error.
 	CancelOnError bool
+	// Errors is the channel used to put all occured errors into, if any.
+	Errors chan error
 	// NumWorkers represents the number of workers to be registered to run
 	// concurrently within the pool.
 	NumWorkers int
