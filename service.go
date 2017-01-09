@@ -3,6 +3,8 @@ package worker
 
 import (
 	"sync"
+
+	"github.com/the-anna-project/context"
 )
 
 // ServiceConfig represents the configuration used to create a new worker
@@ -24,44 +26,29 @@ func NewService(config ServiceConfig) (Service, error) {
 type service struct {
 }
 
-func (s *service) Execute(config ExecuteConfig) error {
-	var wg sync.WaitGroup
-	var once sync.Once
-
-	canceler := make(chan struct{}, 1)
-
-	if config.Canceler != nil {
-		go func() {
-			<-config.Canceler
-			// Receiving a signal from the global canceler will forward the
-			// cancelation to all workers. Simply closing the workers canceler wil
-			// broadcast the signal to each listener. Here we also make sure we do
-			// not close on a closed channel by only closing once.
-			once.Do(func() {
-				close(canceler)
-			})
-		}()
+func (s *service) Execute(ctx context.Context, config ExecuteConfig) error {
+	if config.Errors == nil {
+		config.Errors = make(chan error, len(config.Actions))
 	}
 
-	for n := 0; n < config.NumWorkers; n++ {
+	var wg sync.WaitGroup
+
+	for _, action := range config.Actions {
 		go func() {
-			for _, action := range config.Actions {
+			for n := 0; n < config.NumWorkers; n++ {
 				wg.Add(1)
-				go func(action func(canceler <-chan struct{}) error) {
+				go func(action func(ctx context.Context) error) {
 					defer wg.Done()
 
-					err := action(canceler)
+					err := action(ctx)
 					if err != nil {
 						// We want to capture errors in any case, so we do this at first.
 						config.Errors <- err
 
-						if config.CancelOnError && config.Canceler != nil {
-							// Closing the canceler channel acts as broadcast to all workers that
-							// should listen to the canceler. Here we also make sure we do not
-							// close on a closed channel by only closing once.
-							once.Do(func() {
-								close(config.Canceler)
-							})
+						if config.CancelOnError {
+							// Canceling the context acts as broadcast to all workers that
+							// should listen to the context's done channel.
+							ctx.Cancel()
 						}
 					}
 				}(action)
@@ -88,10 +75,9 @@ func (s *service) ExecuteConfig() ExecuteConfig {
 	return ExecuteConfig{
 		// Settings.
 
-		Actions:       []func(canceler <-chan struct{}) error{},
-		Canceler:      nil,
+		Actions:       []func(ctx context.Context) error{},
 		CancelOnError: true,
-		Errors:        make(chan error, 1),
+		Errors:        nil,
 		NumWorkers:    1,
 	}
 }
