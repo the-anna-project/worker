@@ -9,6 +9,46 @@ import (
 	"github.com/the-anna-project/context"
 )
 
+func Test_Execute_Context_Cancel(t *testing.T) {
+	done := make(chan struct{}, 1)
+	newService := testNewService(t)
+
+	actions := []func(ctx context.Context) error{
+		func(ctx context.Context) error {
+			// When the cancelation works we stop blocking and return below.
+			<-ctx.Done()
+
+			return nil
+		},
+	}
+
+	go func() {
+		ctx, err := context.New(context.DefaultConfig())
+		if err != nil {
+			t.Fatal("expected", nil, "got", err)
+		}
+
+		ctx.Cancel()
+
+		config := newService.ExecuteConfig()
+		config.Actions = actions
+		config.CancelOnError = true
+		config.NumWorkers = 1
+		err = newService.Execute(ctx, config)
+		if err != nil {
+			t.Fatal("expected", nil, "got", err)
+		}
+
+		done <- struct{}{}
+	}()
+
+	select {
+	case <-time.After(10 * time.Millisecond):
+		t.Fatal("expected", "cancel", "got", "timeout")
+	case <-done:
+	}
+}
+
 func Test_Execute_OneAction_OneWorker(t *testing.T) {
 	newService := testNewService(t)
 
