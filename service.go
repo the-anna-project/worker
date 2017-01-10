@@ -78,7 +78,6 @@ func (s *service) Execute(ctx context.Context, config ExecuteConfig) error {
 func (s *service) ExecuteConfig() ExecuteConfig {
 	return ExecuteConfig{
 		// Settings.
-
 		Actions:       []func(ctx context.Context) error{},
 		CancelOnError: true,
 		Errors:        nil,

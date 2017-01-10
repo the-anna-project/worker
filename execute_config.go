@@ -16,7 +16,7 @@ type ExecuteConfig struct {
 	CancelOnError bool
 	// Errors is the channel used to put all occured errors into, if any. When
 	// this is provided manually the caller have to make sure the errors channel
-	// is buffered according to the number of provided actions. TODO check if that is correct
+	// is buffered according to the number of provided actions.
 	Errors chan error
 	// NumWorkers represents the number of workers to be registered to run
 	// concurrently within the pool.
