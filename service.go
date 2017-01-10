@@ -33,26 +33,30 @@ func (s *service) Execute(ctx context.Context, config ExecuteConfig) error {
 
 	var wg sync.WaitGroup
 
-	for _, action := range config.Actions {
+	actions := make(chan func(ctx context.Context) error, len(config.Actions))
+	for _, a := range config.Actions {
+		actions <- a
+	}
+	close(actions)
+
+	wg.Add(config.NumWorkers)
+	for i := 0; i < config.NumWorkers; i++ {
 		go func() {
-			for n := 0; n < config.NumWorkers; n++ {
-				wg.Add(1)
-				go func(action func(ctx context.Context) error) {
-					defer wg.Done()
+			for a := range actions {
+				err := a(ctx)
+				if err != nil {
+					// We want to capture errors in any case, so we do this at first.
+					config.Errors <- err
 
-					err := action(ctx)
-					if err != nil {
-						// We want to capture errors in any case, so we do this at first.
-						config.Errors <- err
-
-						if config.CancelOnError {
-							// Canceling the context acts as broadcast to all workers that
-							// should listen to the context's done channel.
-							ctx.Cancel()
-						}
+					if config.CancelOnError {
+						// Canceling the context acts as broadcast to all workers that
+						// should listen to the context's done channel.
+						ctx.Cancel()
 					}
-				}(action)
+				}
 			}
+
+			wg.Done()
 		}()
 	}
 
